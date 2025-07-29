@@ -1,10 +1,10 @@
 /**
- * Health Tracker App - Reminders Management System (UPDATED WITH TIME WINDOWS)
+ * Health Tracker App - Reminders Management System (UPDATED)
  * 
- * NEW FEATURES:
- * - Time window controls for all reminder types
- * - Active hours setting for system and custom reminders
- * - Enhanced scheduling logic with time window validation
+ * UPDATED FEATURES:
+ * 1. Goal alerts: Simple time + days (no time window)
+ * 2. Interval reminders: Pure interval + active window + days (no fixed time)
+ * 3. Custom reminders: Multiple times support instead of single time
  */
 
 class RemindersManager {
@@ -24,7 +24,7 @@ class RemindersManager {
       proteinAlert: 'notification_protein'
     };
     
-    // UPDATED: Default data structure with time windows for ALL reminder types
+    // UPDATED: Default data structure with simplified settings
     this.defaultData = {
       globalEnabled: false,
       systemNotifications: {
@@ -33,8 +33,8 @@ class RemindersManager {
           time: "20:00",
           days: [],
           onlyIfGoalNotMet: true,
-          message: "Don't forget your daily water goal!",
-          activeWindow: { start: "08:00", end: "22:00" } // NEW
+          message: "Don't forget your daily water goal!"
+          // NO activeWindow - goal alerts don't need time windows
         },
         waterInterval: {
           enabled: false,
@@ -43,14 +43,15 @@ class RemindersManager {
           days: [],
           onlyIfBelowGoal: true,
           message: "Time to drink water!"
+          // NO time - interval reminders work on intervals within active window
         },
         proteinAlert: {
           enabled: false,
           time: "20:00",
           days: [],
           onlyIfGoalNotMet: true,
-          message: "Check your protein intake for today",
-          activeWindow: { start: "08:00", end: "22:00" } // NEW
+          message: "Check your protein intake for today"
+          // NO activeWindow - goal alerts don't need time windows
         },
         proteinInterval: {
           enabled: false,
@@ -59,6 +60,7 @@ class RemindersManager {
           days: [],
           onlyIfBelowGoal: true,
           message: "Time to get your protein!"
+          // NO time - interval reminders work on intervals within active window
         }
       },
       customReminders: []
@@ -71,7 +73,7 @@ class RemindersManager {
     this.migrateFromLegacyNotifications();
     this.scheduleAllReminders();
     
-    console.log('RemindersManager initialized successfully with time windows');
+    console.log('RemindersManager initialized successfully with updated structure');
     console.log('Initial data:', this.data);
   }
   
@@ -89,19 +91,40 @@ class RemindersManager {
           ...this.data.systemNotifications 
         };
         
-        // UPDATED: Ensure activeWindow exists for all system notifications
+        // UPDATED: Clean up structure and migrate old data
         Object.keys(this.data.systemNotifications).forEach(key => {
           if (!Array.isArray(this.data.systemNotifications[key].days)) {
             this.data.systemNotifications[key].days = [];
           }
-          // Add activeWindow if missing
-          if (!this.data.systemNotifications[key].activeWindow) {
+          
+          // Remove activeWindow from goal alerts if it exists (cleanup)
+          if (key.includes('Alert') && this.data.systemNotifications[key].activeWindow) {
+            delete this.data.systemNotifications[key].activeWindow;
+          }
+          
+          // Remove time from interval reminders if it exists (cleanup)
+          if (key.includes('Interval') && this.data.systemNotifications[key].time) {
+            delete this.data.systemNotifications[key].time;
+          }
+          
+          // Ensure interval reminders have activeWindow
+          if (key.includes('Interval') && !this.data.systemNotifications[key].activeWindow) {
             this.data.systemNotifications[key].activeWindow = { start: "08:00", end: "22:00" };
           }
         });
         
-        // UPDATED: Ensure custom reminders have activeWindow
+        // UPDATED: Migrate custom reminders from single time to multiple times
         this.data.customReminders.forEach(reminder => {
+          // Migrate old single time format to new multiple times format
+          if (reminder.time && !reminder.times) {
+            reminder.times = [reminder.time];
+            delete reminder.time;
+          }
+          // Ensure times array exists
+          if (!reminder.times) {
+            reminder.times = ['12:00'];
+          }
+          // Ensure activeWindow exists
           if (!reminder.activeWindow) {
             reminder.activeWindow = { start: "00:00", end: "23:59" };
           }
@@ -213,6 +236,31 @@ class RemindersManager {
       button.classList.toggle('active');
       console.log('Toggled custom day button for day', day, 'active:', button.classList.contains('active'));
     }
+  }
+  
+  /**
+   * NEW: Add time to custom reminder form
+   */
+  addCustomTime() {
+    const container = document.getElementById('custom-times-container');
+    if (!container) return;
+    
+    const timeCount = container.querySelectorAll('.custom-time-item').length;
+    if (timeCount >= 10) {
+      utils.showToast('Maximum 10 times allowed per reminder', 'warning');
+      return;
+    }
+    
+    const timeItem = document.createElement('div');
+    timeItem.className = 'custom-time-item';
+    timeItem.innerHTML = `
+      <input type="time" class="custom-time-input" value="12:00">
+      <button type="button" class="remove-time-btn" onclick="this.parentElement.remove()">
+        <i class="material-icons-round">close</i>
+      </button>
+    `;
+    
+    container.appendChild(timeItem);
   }
   
   /**
@@ -385,6 +433,14 @@ class RemindersManager {
       });
     }
     
+    // Add time button for custom reminders
+    const addTimeBtn = document.getElementById('add-custom-time-btn');
+    if (addTimeBtn) {
+      addTimeBtn.addEventListener('click', () => {
+        this.addCustomTime();
+      });
+    }
+    
     // System notification toggles
     this.attachSystemNotificationListeners();
     
@@ -393,7 +449,7 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Attach system notification listeners with time window support
+   * UPDATED: Attach system notification listeners
    */
   attachSystemNotificationListeners() {
     // System notification toggles
@@ -416,7 +472,7 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Handle system notification setting updates with time window support
+   * UPDATED: Handle system notification setting updates
    */
   updateSystemNotificationSetting(type, setting, value) {
     if (!this.data.systemNotifications[type]) return;
@@ -572,7 +628,7 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Render custom reminder item with time window info
+   * UPDATED: Render custom reminder item with multiple times support
    */
   renderCustomReminderItem(reminder) {
     const scheduleText = this.getCustomReminderScheduleText(reminder);
@@ -606,10 +662,15 @@ class RemindersManager {
   }
   
   /**
-   * Get schedule text for custom reminder
+   * UPDATED: Get schedule text for custom reminder with multiple times
    */
   getCustomReminderScheduleText(reminder) {
-    const timeText = reminder.time;
+    const timesText = reminder.times && reminder.times.length > 0 ? 
+      reminder.times.length === 1 ? 
+        `at ${reminder.times[0]}` : 
+        `at ${reminder.times.length} times` : 
+      'no times set';
+    
     let repeatText = '';
     
     switch (reminder.repeat) {
@@ -632,16 +693,16 @@ class RemindersManager {
         repeatText = 'Custom';
     }
     
-    return `${repeatText} at ${timeText}`;
+    return `${repeatText} ${timesText}`;
   }
   
   /**
-   * Get next alert text
+   * UPDATED: Get next alert text for custom reminders
    */
   getNextAlertText(reminder) {
     if (!reminder.enabled) return null;
     
-    const nextTrigger = this.calculateNextTrigger(reminder);
+    const nextTrigger = this.calculateNextCustomTrigger(reminder);
     if (!nextTrigger) return null;
     
     const now = new Date();
@@ -659,70 +720,91 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Calculate next trigger time for a reminder - with time window validation
+   * UPDATED: Calculate next trigger time for custom reminder with multiple times
    */
-  calculateNextTrigger(reminder) {
+  calculateNextCustomTrigger(reminder) {
+    if (!reminder.times || reminder.times.length === 0) return null;
+    
     const now = new Date();
-    const [hours, minutes] = reminder.time.split(':').map(Number);
+    let nextTriggers = [];
     
     // For one-time reminders
     if (reminder.repeat === 'none' && reminder.date) {
       const reminderDate = new Date(reminder.date);
-      reminderDate.setHours(hours, minutes, 0, 0);
-      
-      // Check if time is within active window
-      if (this.isTimeInActiveWindow(reminderDate, reminder.activeWindow)) {
-        return reminderDate > now ? reminderDate : null;
-      }
-      return null;
+      reminder.times.forEach(timeStr => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        const triggerTime = new Date(reminderDate);
+        triggerTime.setHours(hours, minutes, 0, 0);
+        
+        if (this.isTimeInActiveWindow(triggerTime, reminder.activeWindow) && triggerTime > now) {
+          nextTriggers.push(triggerTime);
+        }
+      });
+    } else {
+      // For repeating reminders, find next occurrence for each time
+      reminder.times.forEach(timeStr => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        let nextTrigger = new Date();
+        nextTrigger.setHours(hours, minutes, 0, 0);
+        
+        // If time has passed today, start from tomorrow
+        if (nextTrigger <= now) {
+          nextTrigger.setDate(nextTrigger.getDate() + 1);
+        }
+        
+        // Handle different repeat patterns
+        switch (reminder.repeat) {
+          case 'daily':
+            if (this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow)) {
+              nextTriggers.push(nextTrigger);
+            }
+            break;
+            
+          case 'weekly':
+            if (reminder.days && reminder.days.length > 0) {
+              // Find next matching day
+              while (!reminder.days.includes(nextTrigger.getDay())) {
+                nextTrigger.setDate(nextTrigger.getDate() + 1);
+              }
+            }
+            if (this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow)) {
+              nextTriggers.push(nextTrigger);
+            }
+            break;
+            
+          case 'monthly':
+            // Same day next month
+            if (nextTrigger.getMonth() === now.getMonth()) {
+              nextTrigger.setMonth(nextTrigger.getMonth() + 1);
+            }
+            if (this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow)) {
+              nextTriggers.push(nextTrigger);
+            }
+            break;
+            
+          case 'yearly':
+            // Same date next year
+            if (nextTrigger.getFullYear() === now.getFullYear() && 
+                (nextTrigger.getMonth() < now.getMonth() || 
+                 (nextTrigger.getMonth() === now.getMonth() && nextTrigger.getDate() <= now.getDate()))) {
+              nextTrigger.setFullYear(nextTrigger.getFullYear() + 1);
+            }
+            if (this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow)) {
+              nextTriggers.push(nextTrigger);
+            }
+            break;
+        }
+      });
     }
     
-    // For repeating reminders
-    let nextTrigger = new Date();
-    nextTrigger.setHours(hours, minutes, 0, 0);
-    
-    // If time has passed today, start from tomorrow
-    if (nextTrigger <= now) {
-      nextTrigger.setDate(nextTrigger.getDate() + 1);
-    }
-    
-    // Handle different repeat patterns
-    switch (reminder.repeat) {
-      case 'daily':
-        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
-        
-      case 'weekly':
-        if (reminder.days && reminder.days.length > 0) {
-          // Find next matching day
-          while (!reminder.days.includes(nextTrigger.getDay())) {
-            nextTrigger.setDate(nextTrigger.getDate() + 1);
-          }
-        }
-        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
-        
-      case 'monthly':
-        // Same day next month
-        if (nextTrigger.getMonth() === now.getMonth()) {
-          nextTrigger.setMonth(nextTrigger.getMonth() + 1);
-        }
-        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
-        
-      case 'yearly':
-        // Same date next year
-        if (nextTrigger.getFullYear() === now.getFullYear() && 
-            (nextTrigger.getMonth() < now.getMonth() || 
-             (nextTrigger.getMonth() === now.getMonth() && nextTrigger.getDate() <= now.getDate()))) {
-          nextTrigger.setFullYear(nextTrigger.getFullYear() + 1);
-        }
-        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
-        
-      default:
-        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
-    }
+    // Return the earliest next trigger
+    return nextTriggers.length > 0 ? 
+      nextTriggers.reduce((earliest, current) => current < earliest ? current : earliest) : 
+      null;
   }
   
   /**
-   * NEW: Check if a time is within the active window
+   * Check if a time is within the active window
    */
   isTimeInActiveWindow(dateTime, activeWindow) {
     if (!activeWindow || !activeWindow.start || !activeWindow.end) {
@@ -850,11 +932,14 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Render system notification settings with time window controls
+   * UPDATED: Render system notification settings with simplified structure
    */
   renderSystemNotificationSettings(type, notification) {
-    let settingsHtml = `
-      <div class="system-notification-settings">
+    let settingsHtml = `<div class="system-notification-settings">`;
+    
+    // Goal alerts: Only time and days (no time window)
+    if (type.includes('Alert')) {
+      settingsHtml += `
         <div class="setting-row">
           <label>Time</label>
           <input type="time" 
@@ -863,10 +948,11 @@ class RemindersManager {
                  data-setting="time"
                  class="system-setting-input">
         </div>
-    `;
+      `;
+    }
     
-    // Add interval setting for both water and protein intervals
-    if ((type === 'waterInterval' || type === 'proteinInterval') && notification.interval) {
+    // Interval reminders: Only interval, active window, and days (no fixed time)
+    if (type.includes('Interval')) {
       settingsHtml += `
         <div class="setting-row">
           <label>Interval</label>
@@ -877,11 +963,6 @@ class RemindersManager {
             <option value="240" ${notification.interval === 240 ? 'selected' : ''}>4 hours</option>
           </select>
         </div>
-      `;
-    }
-    
-    // NEW: Add time window controls for ALL notification types
-    settingsHtml += `
         <div class="setting-row time-window-row">
           <label>Active Hours</label>
           <div class="time-window-inputs">
@@ -900,16 +981,16 @@ class RemindersManager {
                    title="End time">
           </div>
         </div>
-    `;
+      `;
+    }
     
-    // Add days selector with direct onclick handlers
+    // Add days selector for all types
     settingsHtml += `
-        <div class="setting-row">
-          <label>Days</label>
-          ${this.renderSystemDaysSelector(type, notification.days)}
-        </div>
+      <div class="setting-row">
+        <label>Days</label>
+        ${this.renderSystemDaysSelector(type, notification.days)}
       </div>
-    `;
+    </div>`;
     
     return settingsHtml;
   }
@@ -1141,7 +1222,7 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Schedule system notification with time window validation
+   * UPDATED: Schedule system notification with simplified logic
    */
   scheduleSystemNotification(type) {
     const notification = this.data.systemNotifications[type];
@@ -1149,49 +1230,75 @@ class RemindersManager {
     
     console.log('Scheduling system notification:', type);
     
-    if (type === 'waterInterval' || type === 'proteinInterval') {
+    if (type.includes('Interval')) {
       this.scheduleIntervalReminder(type);
     } else {
+      // Goal alerts: Simple time-based with no active window restrictions
       this.scheduleTimeBasedNotification(type, {
         time: notification.time,
         days: notification.days,
-        activeWindow: notification.activeWindow,
         callback: () => this.triggerGoalCheckAlert(type)
       });
     }
   }
   
   /**
-   * UPDATED: Schedule interval notifications with time window validation
+   * UPDATED: Schedule interval notifications with pure interval logic
    */
   scheduleIntervalReminder(type) {
     const config = this.data.systemNotifications[type];
     if (!config.enabled || !config.days || config.days.length === 0) return;
     
     const intervalMs = config.interval * 60 * 1000;
-    const startTime = this.timeStringToMinutes(config.activeWindow.start);
-    const endTime = this.timeStringToMinutes(config.activeWindow.end);
     
-    const checkAndSchedule = () => {
+    // Schedule next interval check
+    const scheduleNextInterval = () => {
       const now = new Date();
       const currentDay = now.getDay();
-      const currentTime = now.getHours() * 60 + now.getMinutes();
       
-      // Check day and time window
-      const dayMatch = config.days.includes(currentDay);
-      const timeMatch = this.isTimeInActiveWindow(now, config.activeWindow);
-      
-      if (dayMatch && timeMatch) {
-        this.triggerIntervalReminder(type);
+      // Check if today is a scheduled day
+      if (!config.days.includes(currentDay)) {
+        // Schedule check for next scheduled day
+        setTimeout(scheduleNextInterval, 60 * 60 * 1000); // Check again in 1 hour
+        return;
       }
+      
+      // Check if we're within active window
+      if (!this.isTimeInActiveWindow(now, config.activeWindow)) {
+        // Wait until start of active window
+        const startTime = this.timeStringToMinutes(config.activeWindow.start);
+        const currentTime = now.getHours() * 60 + now.getMinutes();
+        
+        if (currentTime < startTime) {
+          // Wait until start time today
+          const waitTime = (startTime - currentTime) * 60 * 1000;
+          setTimeout(scheduleNextInterval, waitTime);
+        } else {
+          // Wait until start time tomorrow (or next scheduled day)
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(Math.floor(startTime / 60), startTime % 60, 0, 0);
+          
+          while (!config.days.includes(tomorrow.getDay())) {
+            tomorrow.setDate(tomorrow.getDate() + 1);
+          }
+          
+          const waitTime = tomorrow.getTime() - now.getTime();
+          setTimeout(scheduleNextInterval, waitTime);
+        }
+        return;
+      }
+      
+      // We're in active window, trigger reminder and schedule next
+      this.triggerIntervalReminder(type);
+      setTimeout(scheduleNextInterval, intervalMs);
     };
     
-    const timer = setInterval(checkAndSchedule, intervalMs);
-    this.intervalTimers.set(type, timer);
+    scheduleNextInterval();
   }
   
   /**
-   * UPDATED: Schedule time-based notification with daily repetition and time window validation
+   * UPDATED: Schedule time-based notification with daily repetition (no active window for goal alerts)
    */
   scheduleTimeBasedNotification(timerId, config) {
     const scheduleNext = () => {
@@ -1207,13 +1314,6 @@ class RemindersManager {
       
       while (!config.days.includes(nextTrigger.getDay())) {
         nextTrigger.setDate(nextTrigger.getDate() + 1);
-      }
-      
-      // Check if time is within active window
-      if (!this.isTimeInActiveWindow(nextTrigger, config.activeWindow)) {
-        console.log(`Notification ${timerId} skipped - outside active window`);
-        scheduleNext(); // Try next occurrence
-        return;
       }
       
       const delay = nextTrigger.getTime() - now.getTime();
@@ -1299,33 +1399,99 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Schedule custom reminder with time window validation
+   * UPDATED: Schedule custom reminder with multiple times support
    */
   scheduleCustomReminder(reminder) {
-    const nextTrigger = this.calculateNextTrigger(reminder);
-    if (!nextTrigger) return;
+    if (!reminder.times || reminder.times.length === 0) return;
     
-    console.log('Scheduling custom reminder:', reminder.title, 'for', nextTrigger);
-    
-    reminder.alerts.forEach(alertMinutes => {
-      const alertTime = new Date(nextTrigger.getTime() - (alertMinutes * 60 * 1000));
-      const now = new Date();
+    reminder.times.forEach(timeStr => {
+      const nextTrigger = this.calculateNextCustomTriggerForTime(reminder, timeStr);
+      if (!nextTrigger) return;
       
-      if (alertTime > now) {
-        const delay = alertTime.getTime() - now.getTime();
-        const timerId = `custom_${reminder.id}_${alertMinutes}`;
+      console.log('Scheduling custom reminder:', reminder.title, 'at', timeStr, 'for', nextTrigger);
+      
+      reminder.alerts.forEach(alertMinutes => {
+        const alertTime = new Date(nextTrigger.getTime() - (alertMinutes * 60 * 1000));
+        const now = new Date();
         
-        const timer = setTimeout(() => {
-          // Double-check time window before sending
-          if (this.isTimeInActiveWindow(new Date(), reminder.activeWindow)) {
-            this.triggerCustomReminder(reminder, alertMinutes);
-          }
-          this.scheduleCustomReminder(reminder);
-        }, delay);
-        
-        this.activeTimers.set(timerId, timer);
-      }
+        if (alertTime > now) {
+          const delay = alertTime.getTime() - now.getTime();
+          const timerId = `custom_${reminder.id}_${timeStr}_${alertMinutes}`;
+          
+          const timer = setTimeout(() => {
+            // Double-check time window before sending
+            if (this.isTimeInActiveWindow(new Date(), reminder.activeWindow)) {
+              this.triggerCustomReminder(reminder, alertMinutes);
+            }
+            this.scheduleCustomReminder(reminder);
+          }, delay);
+          
+          this.activeTimers.set(timerId, timer);
+        }
+      });
     });
+  }
+  
+  /**
+   * NEW: Calculate next trigger for specific time in custom reminder
+   */
+  calculateNextCustomTriggerForTime(reminder, timeStr) {
+    const now = new Date();
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    
+    // For one-time reminders
+    if (reminder.repeat === 'none' && reminder.date) {
+      const reminderDate = new Date(reminder.date);
+      reminderDate.setHours(hours, minutes, 0, 0);
+      
+      if (this.isTimeInActiveWindow(reminderDate, reminder.activeWindow) && reminderDate > now) {
+        return reminderDate;
+      }
+      return null;
+    }
+    
+    // For repeating reminders
+    let nextTrigger = new Date();
+    nextTrigger.setHours(hours, minutes, 0, 0);
+    
+    // If time has passed today, start from tomorrow
+    if (nextTrigger <= now) {
+      nextTrigger.setDate(nextTrigger.getDate() + 1);
+    }
+    
+    // Handle different repeat patterns
+    switch (reminder.repeat) {
+      case 'daily':
+        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
+        
+      case 'weekly':
+        if (reminder.days && reminder.days.length > 0) {
+          // Find next matching day
+          while (!reminder.days.includes(nextTrigger.getDay())) {
+            nextTrigger.setDate(nextTrigger.getDate() + 1);
+          }
+        }
+        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
+        
+      case 'monthly':
+        // Same day next month
+        if (nextTrigger.getMonth() === now.getMonth()) {
+          nextTrigger.setMonth(nextTrigger.getMonth() + 1);
+        }
+        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
+        
+      case 'yearly':
+        // Same date next year
+        if (nextTrigger.getFullYear() === now.getFullYear() && 
+            (nextTrigger.getMonth() < now.getMonth() || 
+             (nextTrigger.getMonth() === now.getMonth() && nextTrigger.getDate() <= now.getDate()))) {
+          nextTrigger.setFullYear(nextTrigger.getFullYear() + 1);
+        }
+        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
+        
+      default:
+        return this.isTimeInActiveWindow(nextTrigger, reminder.activeWindow) ? nextTrigger : null;
+    }
   }
   
   /**
@@ -1490,26 +1656,29 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Save custom reminder with proper day selection and time window validation
+   * UPDATED: Save custom reminder with multiple times support
    */
   saveCustomReminder() {
     const title = document.getElementById('reminder-title')?.value?.trim();
     const date = document.getElementById('reminder-date')?.value;
-    const time = document.getElementById('reminder-time')?.value;
     const repeat = document.getElementById('reminder-repeat')?.value;
     const notes = document.getElementById('reminder-notes')?.value?.trim();
     
-    // NEW: Get time window values
+    // Get time window values
     const startTime = document.getElementById('custom-start-time')?.value || '00:00';
     const endTime = document.getElementById('custom-end-time')?.value || '23:59';
+    
+    // NEW: Get multiple times
+    const timeInputs = document.querySelectorAll('.custom-time-input');
+    const times = Array.from(timeInputs).map(input => input.value).filter(time => time);
     
     if (!title) {
       utils.showToast('Please enter a reminder title', 'error');
       return;
     }
     
-    if (!time) {
-      utils.showToast('Please set a time', 'error');
+    if (times.length === 0) {
+      utils.showToast('Please set at least one time', 'error');
       return;
     }
     
@@ -1539,14 +1708,14 @@ class RemindersManager {
     // Create or update reminder
     const reminderData = {
       title,
-      time,
+      times, // NEW: Multiple times instead of single time
       repeat,
       alerts,
       notes,
       enabled: true,
       days: repeat === 'weekly' ? days : [],
       date: repeat === 'none' && date ? date : null,
-      activeWindow: { start: startTime, end: endTime } // NEW: Add time window
+      activeWindow: { start: startTime, end: endTime }
     };
     
     if (this.currentView === 'edit-custom' && this.editingReminderId) {
@@ -1600,7 +1769,7 @@ class RemindersManager {
   }
   
   /**
-   * UPDATED: Render custom reminder modal (add or edit) with time window controls
+   * UPDATED: Render custom reminder modal with multiple times support
    */
   renderCustomReminderModal(isEdit = false) {
     const reminder = isEdit && this.editingReminderId ? 
@@ -1628,22 +1797,27 @@ class RemindersManager {
                  maxlength="100">
         </div>
         
-        <!-- Date & Time -->
+        <!-- Date -->
         <div class="form-group">
-          <label class="form-label">Date & Time</label>
-          <div class="date-time-group">
-            <input type="date" 
-                   id="reminder-date" 
-                   class="reminder-date-input"
-                   value="${reminder && reminder.date ? reminder.date : ''}">
-            <input type="time" 
-                   id="reminder-time" 
-                   class="reminder-time-input"
-                   value="${reminder ? reminder.time : '12:00'}">
-          </div>
+          <label class="form-label">Date (for one-time reminders)</label>
+          <input type="date" 
+                 id="reminder-date" 
+                 class="reminder-date-input"
+                 value="${reminder && reminder.date ? reminder.date : ''}">
         </div>
         
-        <!-- NEW: Active Hours -->
+        <!-- NEW: Multiple Times -->
+        <div class="form-group">
+          <label class="form-label">Times</label>
+          <div class="custom-times-container" id="custom-times-container">
+            ${this.renderCustomTimesList(reminder ? reminder.times : ['12:00'])}
+          </div>
+          <button type="button" class="add-alert-btn" id="add-custom-time-btn">
+            <i class="material-icons-round">add</i> Add Time
+          </button>
+        </div>
+        
+        <!-- Active Hours -->
         <div class="form-group">
           <label class="form-label">Active Hours</label>
           <div class="time-window-group">
@@ -1708,6 +1882,20 @@ class RemindersManager {
     `;
     
     this.elements.remindersPanel.innerHTML = html;
+  }
+  
+  /**
+   * NEW: Render custom times list
+   */
+  renderCustomTimesList(times) {
+    return times.map((time, index) => `
+      <div class="custom-time-item">
+        <input type="time" class="custom-time-input" value="${time}">
+        ${times.length > 1 ? `<button type="button" class="remove-time-btn" onclick="this.parentElement.remove()">
+          <i class="material-icons-round">close</i>
+        </button>` : ''}
+      </div>
+    `).join('');
   }
   
   /**
